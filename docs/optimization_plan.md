@@ -58,9 +58,15 @@ conda/mamba 创建环境，因为 conda Python 通常自带匹配的 headers。
 
 ### P2：训练与框架扩展
 
-- 更新训练脚本中的 AMP API，兼容新版 PyTorch。
-- 缓存或预处理图构建结果，降低 DataLoader worker 压力。
-- 对 batch size、workers、GPU 利用率、CPU 数据准备时间做可复现实验。
+- 更新训练脚本中的 AMP API，兼容新版 PyTorch。已完成。
+- 缓存或预处理图构建结果，降低 DataLoader worker 压力。已新增
+  `cache_graphs`、`precompute_graphs`、`persistent_workers`、`prefetch_factor`
+  配置；在 TiMgSbBi `batch=32/workers=4` 的 5 epoch DGX 测试中，预构建图 +
+  persistent workers 将 steady DataLoader wait 降低约 `92%`，训练循环总时间约
+  `1.10x`，但 process-tree RSS 从约 `9.22 GiB` 升到 `11.29 GiB`。
+- 对 batch size、workers、GPU 利用率、CPU 数据准备时间做可复现实验。训练 benchmark
+  已记录 data wait、GPU 利用率、RSS 与 host available memory；后续可继续扩展到更大
+  数据集和 disk cache。
 - TorchSim 接入放到后续阶段；当前先优化 GPTFF 自身。
 
 ## 版权与借鉴边界

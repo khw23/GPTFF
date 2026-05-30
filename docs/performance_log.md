@@ -140,3 +140,73 @@ useful for locating the allocator peak.
   reduces CUDA peak allocation by about `59%`, from `5.16 GiB` to `2.10 GiB`, but slows
   end-to-end force calls by about `37%`. Keep it opt-in for larger or memory-limited
   systems rather than enabling it by default.
+
+## 2026-05-30 - Training data and graph pipeline optimization
+
+### Change
+
+- Reworked `gptff.utils_.data.Mydataset`.
+  - Original path: each `__getitem__` read pandas columns, parsed string literals,
+    built a full `pymatgen.Structure`, then extracted atomic numbers, Cartesian
+    coordinates and the lattice before building neighbor and three-body graphs.
+  - New path: for common ordered `Structure.as_dict()` rows, `structure_arrays()` reads
+    `sites[*].xyz`, `sites[*].species[0].element` and `lattice.matrix` directly, and
+    only falls back to `pymatgen.Structure.from_dict()` for uncommon rows.
+  - Labels are read from column lists / NumPy arrays instead of repeated pandas scalar
+    indexing.
+- Added dataset-level graph caching.
+  - `cache_graphs=True` keeps computed graph tuples in the dataset.
+  - `precompute_graphs=True` builds all graph tuples once before the DataLoader starts.
+  - `cache_info()` reports whether the cache is enabled and how many items are filled.
+- Updated the training entrypoint.
+  - New config keys: `cache_graphs`, `precompute_graphs`, `persistent_workers`,
+    `pin_memory`, `prefetch_factor`.
+  - Existing configs still work; defaults are conservative except that
+    `persistent_workers` defaults to `True` when `workers > 0`.
+- Lightened `collate_fn` by using `np.asarray` / `torch.as_tensor` where possible and
+  by avoiding a redundant Python list conversion for `n_bond_pairs_struc`.
+
+The collated batch contract is unchanged:
+
+```text
+atom_fea, coords, offsets, lattice, n_atoms, pairs_count, nbr_atoms,
+bond_pairs_indices, n_bond_pairs_bond, target_energy, target_forces,
+target_stress, ref_energy
+```
+
+### Validation
+
+- ASE `3.26.0`: `18 passed, 1 skipped`
+- ASE `3.28.0`: `18 passed, 1 skipped`
+- Explicit training smoke: `1 passed`
+- Full CUDA correctness suite on LiCoO2 primitive cell, V1 checkpoint: all `6/6`
+  workflows passed.
+
+### Benchmark
+
+Dataset: `human/train/TiMgSbBi.csv`, `1799/200` train/validation structures.
+Configuration: `batch=32`, `workers=4`, `5 epochs`, checkpoint writes disabled,
+DGX Spark / `NVIDIA GB10`.
+
+| variant | setup | training-loop total | incl. graph setup | steady train atoms/s | steady data wait | RSS peak |
+|---|---|---:|---:|---:|---:|---:|
+| baseline `22de21f` | old parser, no persistent workers | 34.44 s | 34.44 s | 7106 | 0.199 s/epoch | 9.22 GiB |
+| optimized lazy | direct parser/cache, no persistent workers | 33.77 s | 33.77 s | 7218 | 0.192 s/epoch | 9.22 GiB |
+| precompute + persistent | direct parser/cache, precompute graphs, persistent workers | 31.44 s | 33.41 s | 7429 | 0.016 s/epoch | 11.29 GiB |
+
+`precompute_graphs=True` spent `1.97 s` building graph tuples before training. For only
+`5` epochs, including that setup cost gives a modest `1.03x` full wall-time speedup
+over the baseline. Excluding the one-time setup cost, the training loop itself is
+`1.10x` faster. For long runs, the one-time graph setup is amortized.
+
+### Conclusion
+
+- Direct structure parsing and lighter collation are small but positive by themselves
+  (`~2%` total speedup in this 5-epoch run).
+- The main useful mode is `precompute_graphs=True` plus persistent workers. It cuts
+  steady-state DataLoader wait by about `92%` and raises steady train throughput by
+  about `4.5%` on this workload.
+- The tradeoff is host/process RSS accounting: process-tree RSS rose from about
+  `9.22 GiB` to `11.29 GiB`. DGX Spark host available memory stayed above `113 GiB`,
+  so this is safe for the tested dataset, but very large datasets should either disable
+  precompute or shard/cache to disk in a later optimization.

@@ -48,7 +48,7 @@ class CFG:
     device = js['training']['device']
     data_path = js['data']['data_path']
     data_file = js['data']['data_file']
-    num_workers = js['training']['workers']
+    num_workers = int(js['training']['workers'])
     lr = js['training']['learning_rate']
     weight_decay = js['training']['weight_decay']
     epochs = js['training']['epochs']
@@ -56,6 +56,11 @@ class CFG:
     w1 = js['training']['weight_energy']
     w2 = js['training']['weight_force']
     w3 = js['training']['weight_stress']
+    cache_graphs = bool(js['training'].get('cache_graphs', True))
+    precompute_graphs = bool(js['training'].get('precompute_graphs', False))
+    persistent_workers = bool(js['training'].get('persistent_workers', num_workers > 0))
+    pin_memory = bool(js['training'].get('pin_memory', str(js['training']['device']).startswith('cuda')))
+    prefetch_factor = int(js['training'].get('prefetch_factor', 2))
     transformer_activate = js['training']['transformer_activate']
     node_feature_len = js['training']['node_feature_len']
     edge_feature_len = js['training']['edge_feature_len']
@@ -71,20 +76,22 @@ df = pd.read_csv(os.path.join(CFG.data_path, CFG.data_file))
 df_trn = df.loc[df['fold'] != CFG.val_fold].reset_index(drop=True)
 df_val = df.loc[df['fold'] == CFG.val_fold].reset_index(drop=True)
 
-trn_dataset = Mydataset(df_trn)
-val_dataset = Mydataset(df_val)
+trn_dataset = Mydataset(df_trn, cache_graphs=CFG.cache_graphs, precompute_graphs=CFG.precompute_graphs)
+val_dataset = Mydataset(df_val, cache_graphs=CFG.cache_graphs, precompute_graphs=CFG.precompute_graphs)
 
-train_loader = DataLoader(trn_dataset, batch_size=CFG.batch_size,
-                              num_workers=CFG.num_workers,
-                              shuffle=True,
-                              collate_fn=collate_fn,
-                              pin_memory=True)
+loader_kwargs = dict(
+    batch_size=CFG.batch_size,
+    num_workers=CFG.num_workers,
+    collate_fn=collate_fn,
+    pin_memory=CFG.pin_memory,
+)
+if CFG.num_workers > 0:
+    loader_kwargs["persistent_workers"] = CFG.persistent_workers
+    loader_kwargs["prefetch_factor"] = CFG.prefetch_factor
 
-val_loader = DataLoader(val_dataset, batch_size=CFG.batch_size,
-                        shuffle=False,
-                        num_workers=CFG.num_workers,
-                        collate_fn=collate_fn,
-                        pin_memory=True)
+train_loader = DataLoader(trn_dataset, shuffle=True, **loader_kwargs)
+
+val_loader = DataLoader(val_dataset, shuffle=False, **loader_kwargs)
 
 
 # build model

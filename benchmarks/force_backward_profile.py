@@ -55,7 +55,12 @@ def profile_once(atoms, calc, mode):
         torch.cuda.empty_cache()
         torch.cuda.reset_peak_memory_stats()
 
-    timings = {"mode": mode, "atoms": len(atoms), "use_checkpoint": calc.use_checkpoint}
+    timings = {
+        "mode": mode,
+        "atoms": len(atoms),
+        "use_checkpoint": calc.use_checkpoint,
+        "checkpoint_mode": calc.checkpoint_mode,
+    }
 
     data = timed("graph", timings, lambda: calc.graph.transform(atoms))
     data = timed("collate", timings, lambda: collate_fn(data))
@@ -137,12 +142,13 @@ def main():
     parser.add_argument("--mode", choices=["forces", "stress"], default="forces")
     parser.add_argument("--warmup", type=int, default=1)
     parser.add_argument("--steps", type=int, default=5)
-    parser.add_argument("--use-checkpoint", action="store_true")
+    parser.add_argument("--use-checkpoint", action="store_true", help="Compatibility flag for whole-model checkpointing.")
+    parser.add_argument("--checkpoint-mode", choices=["none", "model", "layer"], default=None)
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
 
     atoms = read(args.structure) * args.repeat
-    calc = ASECalculator(args.checkpoint, device=args.device, use_checkpoint=args.use_checkpoint)
+    calc = ASECalculator(args.checkpoint, device=args.device, use_checkpoint=args.use_checkpoint, checkpoint_mode=args.checkpoint_mode)
 
     for idx in range(args.warmup):
         profile_once(atoms.copy(), calc, args.mode)

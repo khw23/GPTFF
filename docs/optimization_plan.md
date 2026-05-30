@@ -50,6 +50,10 @@ conda/mamba 创建环境，因为 conda Python 通常自带匹配的 headers。
 - force backward profile 显示当前 `864` 原子 force 路径主开销在模型 forward/backward，
   graph/collate/features 不是主瓶颈。
 - whole-model checkpointing 已验证不降低最终 force peak，暂不作为默认优化。
+- 新增 `checkpoint_mode="layer"` 的 layer/block 级 checkpoint。它在 LiCoO2 `864`
+  原子 V1 force 路径中把 CUDA peak allocation 从约 `5.16 GiB` 降到 `2.10 GiB`，
+  但 end-to-end force 调用约慢 `37%`，因此作为大体系/内存受限场景的显式开关保留，
+  不默认启用。
 - 针对 `predict_energies_batched` 做更系统的 batch 大小和内存测试。
 
 ### P2：训练与框架扩展

@@ -104,6 +104,7 @@ def main():
     parser.add_argument("--warmup", type=int, default=5)
     parser.add_argument("--steps", type=int, default=20)
     parser.add_argument("--modes", default="energy,forces,stress")
+    parser.add_argument("--use-checkpoint", action="store_true", help="Use torch checkpointing inside GPTFF forward for autograd paths.")
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
 
@@ -111,7 +112,7 @@ def main():
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     atoms = read(args.structure) * args.repeat
-    calc = ASECalculator(args.checkpoint, device=args.device)
+    calc = ASECalculator(args.checkpoint, device=args.device, use_checkpoint=args.use_checkpoint)
     modes = [m.strip() for m in args.modes.split(",") if m.strip()]
 
     metadata = {
@@ -123,6 +124,7 @@ def main():
         "torch": torch.__version__,
         "cuda_available": torch.cuda.is_available(),
         "cuda_device": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
+        "use_checkpoint": args.use_checkpoint,
     }
 
     rows = []

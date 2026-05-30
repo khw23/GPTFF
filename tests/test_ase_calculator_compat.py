@@ -64,3 +64,18 @@ def test_calculator_uses_property_specific_paths():
     atoms.positions[0, 0] -= 1.0e-5
     atoms.get_stress(voigt=False)
     assert "stress" in calc.results
+
+
+def test_checkpointed_force_path_matches_default():
+    atoms_default = Atoms("Li2O", positions=[[0.0, 0.0, 0.0], [2.2, 0.0, 0.0], [1.1, 1.6, 0.0]], cell=[12.0, 12.0, 12.0], pbc=True)
+    atoms_checkpointed = atoms_default.copy()
+    atoms_default.calc = ASECalculator(str(CHECKPOINTS[0]), device="cpu")
+    atoms_checkpointed.calc = ASECalculator(str(CHECKPOINTS[0]), device="cpu", use_checkpoint=True)
+
+    energy_default = atoms_default.get_potential_energy()
+    forces_default = atoms_default.get_forces()
+    energy_checkpointed = atoms_checkpointed.get_potential_energy()
+    forces_checkpointed = atoms_checkpointed.get_forces()
+
+    assert np.isclose(energy_default, energy_checkpointed, rtol=1.0e-5, atol=1.0e-5)
+    assert np.allclose(forces_default, forces_checkpointed, rtol=1.0e-4, atol=1.0e-4)

@@ -37,3 +37,44 @@
   strain autograd.
 - Detailed local results are stored in the parent DGX benchmark project under
   `results/gptff_optimization/2026-05-30/`.
+
+## 2026-05-30 - Correctness suite and force backward profiling
+
+### Correctness
+
+Added:
+
+- `tests/test_calculator_workflows.py`
+- `benchmarks/correctness_suite.py`
+
+Coverage:
+
+- EFS path consistency
+- finite-difference force smoke
+- fixed-cell structure optimization
+- short NVE MD
+- `FrechetCellFilter` cell-optimization smoke in the full suite
+- training entrypoint smoke with generated tiny CSV/config
+
+Validation:
+
+- ASE `3.26.0`: `12 passed, 1 skipped`
+- ASE `3.28.0`: `12 passed, 1 skipped`
+- Training smoke explicitly enabled: `1 passed`
+- Full CUDA suite on LiCoO2 primitive cell: all `6/6` workflows passed.
+
+### Force backward profile
+
+Added `benchmarks/force_backward_profile.py`.
+
+LiCoO2 `6x6x2` (`864` atoms), V1 checkpoint, force-only path:
+
+| variant | graph | collate | features | forward | backward | final peak |
+|---|---:|---:|---:|---:|---:|---:|
+| default | 0.025 s | 0.009 s | 0.001 s | 0.270 s | 0.161 s | 5.18 GiB |
+| whole-model checkpoint | 0.025 s | 0.011 s | 0.001 s | 0.184 s | 0.380 s | 5.18 GiB |
+
+Whole-model checkpointing reduces forward-phase peak memory but does not reduce final
+force-backward peak for this workload, and increases total profiled time by about
+`1.29x`. It is exposed as an explicit `use_checkpoint=True` experiment but should not
+be enabled by default for current GPTFF MD benchmarks.

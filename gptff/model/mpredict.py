@@ -3,6 +3,7 @@ from ase import Atoms
 from ase.calculators.calculator import Calculator, all_changes
 from gptff.model import model 
 import torch
+from torch.utils.checkpoint import checkpoint as torch_checkpoint
 from typing import Optional, Sequence
 from tqdm import tqdm
 from gptff.utils_.compute_tp import compute_tp_cc
@@ -192,7 +193,7 @@ class ASECalculator(Calculator):
 
     implemented_properties = ["energy", "free_energy", "forces", "stress"]
 
-    def __init__(self, model_path, device='cuda', **kwargs):
+    def __init__(self, model_path, device='cuda', use_checkpoint=False, **kwargs):
         super().__init__(**kwargs)
 
         self.state = _load_checkpoint(model_path, device)
@@ -206,13 +207,14 @@ class ASECalculator(Calculator):
         self.device = device
         self.model.load_state_dict(self.state['state_dict'])
         self.model = self.model.to(device)
+        self.use_checkpoint = use_checkpoint
         for param in self.model.parameters():
             param.requires_grad_(False)
         self.model.eval()
         self.graph = custom_graph()
 
     def _model_energy(self, atom_fea, pair_dist_ij, n_atoms, triple_dist_ij, triple_dist_ik, triple_a_jik, nbr_atoms, n_bond_pairs_bond, bond_pairs_indices, ref_energy):
-        energy = self.model(
+        model_args = (
             atom_fea,
             pair_dist_ij,
             n_atoms,
@@ -223,6 +225,10 @@ class ASECalculator(Calculator):
             n_bond_pairs_bond,
             bond_pairs_indices,
         )
+        if self.use_checkpoint and torch.is_grad_enabled():
+            energy = torch_checkpoint(self.model, *model_args, use_reentrant=False, preserve_rng_state=False)
+        else:
+            energy = self.model(*model_args)
         return energy.view(-1) + ref_energy
 
     def get_energy(self, data):

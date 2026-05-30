@@ -37,6 +37,7 @@ conda/mamba 创建环境，因为 conda Python 通常自带匹配的 headers。
 - 单原子体系和两原子体系返回有限能量与正确形状的力。
 - README 示例改为 `atoms.calc = calc`，避免旧 ASE calculator API 用法。
 - `torch.load` 显式使用 `weights_only=False`，避免新版 PyTorch 默认行为变化。
+- 完整 correctness suite 覆盖 EFS、有限差分、结构优化、短 MD 和训练入口 smoke。
 
 ### P1：轻量性能优化
 
@@ -46,6 +47,9 @@ conda/mamba 创建环境，因为 conda Python 通常自带匹配的 headers。
   每步计算应力。首轮实现见 `docs/performance_log.md`。
 - calculator 热路径直接从 ASE `Atoms` 读取坐标、晶格和原子序数，避免每步转换成
   pymatgen `Structure`。
+- force backward profile 显示当前 `864` 原子 force 路径主开销在模型 forward/backward，
+  graph/collate/features 不是主瓶颈。
+- whole-model checkpointing 已验证不降低最终 force peak，暂不作为默认优化。
 - 针对 `predict_energies_batched` 做更系统的 batch 大小和内存测试。
 
 ### P2：训练与框架扩展

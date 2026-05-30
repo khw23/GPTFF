@@ -1,10 +1,14 @@
 *.txt
 test*
+!tests/
+!tests/**/*.py
 build*
 __pycache__
+.pytest_cache
 *.sh
 main.py
 *.cpp
+*.so
 *.egg*
 *.gz
 *.whl

@@ -44,3 +44,23 @@ def test_pretrained_calculator_stress_shape(checkpoint):
 
     assert stress.shape == (3, 3)
     assert np.all(np.isfinite(stress))
+
+
+def test_calculator_uses_property_specific_paths():
+    calc = ASECalculator(str(CHECKPOINTS[0]), device="cpu")
+    atoms = Atoms("Li2", positions=[[0.0, 0.0, 0.0], [2.8, 0.0, 0.0]], cell=[20.0, 20.0, 20.0], pbc=True)
+    atoms.calc = calc
+
+    atoms.get_potential_energy()
+    assert "energy" in calc.results
+    assert "forces" not in calc.results
+    assert "stress" not in calc.results
+
+    atoms.positions[0, 0] += 1.0e-5
+    atoms.get_forces()
+    assert "forces" in calc.results
+    assert "stress" not in calc.results
+
+    atoms.positions[0, 0] -= 1.0e-5
+    atoms.get_stress(voigt=False)
+    assert "stress" in calc.results

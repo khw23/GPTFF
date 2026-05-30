@@ -42,8 +42,10 @@ conda/mamba 创建环境，因为 conda Python 通常自带匹配的 headers。
 
 - 推理模式冻结参数 `requires_grad=False`，减少 autograd 管理开销。
 - 将容易造成单样本维度坍缩的裸 `squeeze()` 改为保形状写法。
-- 后续可进一步区分 force-only 和 stress 计算路径：MD 通常只需要力，不一定需要
-  每步计算应力。
+- 区分 energy-only、force-only 和 stress 计算路径：MD 通常只需要力，不一定需要
+  每步计算应力。首轮实现见 `docs/performance_log.md`。
+- calculator 热路径直接从 ASE `Atoms` 读取坐标、晶格和原子序数，避免每步转换成
+  pymatgen `Structure`。
 - 针对 `predict_energies_batched` 做更系统的 batch 大小和内存测试。
 
 ### P2：训练与框架扩展

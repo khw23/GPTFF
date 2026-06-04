@@ -1,0 +1,31 @@
+name: gptff
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - "pip>=24"
+  - "setuptools>=68"
+  - wheel
+  - "cython>=3"
+  - "numpy>=1.26,<3"
+  - gcc
+  - gxx
+  - libstdcxx-ng
+  - openblas
+  - pkg-config
+  - hdf5
+  - h5py
+  - pytables
+  - scipy
+  - pandas
+  - scikit-learn
+  - pymatgen
+  - "ase>=3.26,<3.29"
+  - psutil
+  - tqdm
+  - joblib
+  - pip:
+      # Matches the tested PyPI wheel route on the A100 server. This pulls the
+      # compatible nvidia-*-cu12 runtime wheels through torch's dependencies.
+      - torch==2.6.0
